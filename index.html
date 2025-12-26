@@ -1,1 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lead Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen p-4">
 
+    <div class="max-w-md mx-auto">
+        <h1 class="text-2xl font-bold text-gray-800 mb-6">Active Leads</h1>
+        
+        <input type="text" id="search" placeholder="Search company..." class="w-full p-3 rounded-lg border mb-4 shadow-sm">
+
+        <div id="lead-list" class="space-y-4">
+            <p class="text-gray-500">Loading leads...</p>
+        </div>
+    </div>
+
+    <div id="modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-xl p-6 w-full max-w-sm">
+            <h2 id="modal-title" class="text-xl font-bold mb-4"></h2>
+            <textarea id="note-input" placeholder="What happened on this visit?" class="w-full h-32 p-3 border rounded-lg mb-4"></textarea>
+            <div class="flex space-x-2">
+                <button onclick="closeModal()" class="flex-1 py-2 bg-gray-200 rounded-lg">Cancel</button>
+                <button onclick="submitUpdate()" class="flex-1 py-2 bg-blue-600 text-white rounded-lg">Save Visit</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const SCRIPT_URL = "https://script.google.com/a/macros/officialh2o.com/s/AKfycbx86qPsDOUZq9FJTL2cnecEqVi0pSeOXXSukhYcb_HUVjEwkepO6rjK72TjhBcA2euR/exec";
+        let allLeads = [];
+        let selectedLead = "";
+
+        // Fetch leads on load
+        async function fetchLeads() {
+            const response = await fetch(SCRIPT_URL);
+            allLeads = await response.json();
+            renderLeads(allLeads);
+        }
+
+        function renderLeads(leads) {
+            const container = document.getElementById('lead-list');
+            container.innerHTML = leads.map(lead => `
+                <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+                    <h3 class="font-bold text-lg">${lead['Lead Name']}</h3>
+                    <p class="text-sm text-gray-500 mb-3">Last Note: ${lead['Notes'] || 'No notes yet'}</p>
+                    <button onclick="openModal('${lead['Lead Name']}')" class="w-full py-2 bg-green-50 text-green-700 font-semibold rounded-lg border border-green-200 hover:bg-green-100">
+                        + Log Visit
+                    </button>
+                </div>
+            `).join('');
+        }
+
+        function openModal(name) {
+            selectedLead = name;
+            document.getElementById('modal-title').innerText = name;
+            document.getElementById('modal').classList.remove('hidden');
+        }
+
+        function closeModal() {
+            document.getElementById('modal').classList.add('hidden');
+        }
+
+        async function submitUpdate() {
+            const notes = document.getElementById('note-input').value;
+            const btn = event.target;
+            btn.innerText = "Saving...";
+
+            await fetch(SCRIPT_URL, {
+                method: "POST",
+                body: JSON.stringify({ leadName: selectedLead, notes: notes })
+            });
+
+            location.reload(); // Refresh to show changes
+        }
+
+        fetchLeads();
+    </script>
+</body>
+</html>
