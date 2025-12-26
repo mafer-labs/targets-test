@@ -3,28 +3,51 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Lead Tracker</title>
+    <title>Lead Tracker App</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Modern feel: Hide scrollbar but keep functionality */
+        ::-webkit-scrollbar { width: 0px; background: transparent; }
+    </style>
 </head>
-<body class="bg-gray-100 min-h-screen p-4">
+<body class="bg-slate-50 min-h-screen pb-20">
 
-    <div class="max-w-md mx-auto">
-        <h1 class="text-2xl font-bold text-gray-800 mb-6">Active Leads</h1>
-        
-        <input type="text" id="search" placeholder="Search company..." class="w-full p-3 rounded-lg border mb-4 shadow-sm">
+    <header class="bg-white border-b sticky top-0 z-10 p-4 shadow-sm">
+        <div class="max-w-md mx-auto">
+            <h1 class="text-xl font-bold text-slate-800">Sales Lead Tracker</h1>
+            <p class="text-xs text-slate-500">Updating: Targets test data</p>
+        </div>
+    </header>
+
+    <main class="max-w-md mx-auto p-4">
+        <div class="relative mb-6">
+            <input type="text" id="search" oninput="filterLeads()" placeholder="Search company name..." 
+                class="w-full p-4 pl-12 rounded-2xl border-none shadow-md focus:ring-2 focus:ring-blue-500 outline-none">
+            <svg class="w-6 h-6 absolute left-4 top-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+        </div>
 
         <div id="lead-list" class="space-y-4">
-            <p class="text-gray-500">Loading leads...</p>
+            <div class="text-center py-10">
+                <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
+                <p class="text-slate-500">Fetching leads from Sheet...</p>
+            </div>
         </div>
-    </div>
+    </main>
 
-    <div id="modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
-        <div class="bg-white rounded-xl p-6 w-full max-w-sm">
-            <h2 id="modal-title" class="text-xl font-bold mb-4"></h2>
-            <textarea id="note-input" placeholder="What happened on this visit?" class="w-full h-32 p-3 border rounded-lg mb-4"></textarea>
-            <div class="flex space-x-2">
-                <button onclick="closeModal()" class="flex-1 py-2 bg-gray-200 rounded-lg">Cancel</button>
-                <button onclick="submitUpdate()" class="flex-1 py-2 bg-blue-600 text-white rounded-lg">Save Visit</button>
+    <div id="modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-4">
+        <div class="bg-white rounded-t-3xl sm:rounded-2xl p-6 w-full max-w-sm shadow-2xl transform transition-all">
+            <div class="flex justify-between items-center mb-4">
+                <h2 id="modal-title" class="text-xl font-bold text-slate-800"></h2>
+                <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600">&times;</button>
+            </div>
+            
+            <label class="block text-sm font-medium text-slate-700 mb-2">Visit Notes</label>
+            <textarea id="note-input" placeholder="What happened? (e.g. Left flyer, spoke to manager)" 
+                class="w-full h-32 p-4 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none resize-none mb-6"></textarea>
+            
+            <div class="flex space-x-3">
+                <button onclick="closeModal()" class="flex-1 py-4 font-semibold text-slate-600 bg-slate-100 rounded-xl hover:bg-slate-200 transition">Cancel</button>
+                <button id="save-btn" onclick="submitUpdate()" class="flex-1 py-4 font-semibold text-white bg-blue-600 rounded-xl hover:bg-blue-700 shadow-lg shadow-blue-200 transition">Save Visit</button>
             </div>
         </div>
     </div>
@@ -32,49 +55,87 @@
     <script>
         const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx86qPsDOUZq9FJTL2cnecEqVi0pSeOXXSukhYcb_HUVjEwkepO6rjK72TjhBcA2euR/exec";
         let allLeads = [];
-        let selectedLead = "";
+        let selectedLeadName = "";
 
-        // Fetch leads on load
+        // Initial Load
         async function fetchLeads() {
-            const response = await fetch(SCRIPT_URL);
-            allLeads = await response.json();
-            renderLeads(allLeads);
+            try {
+                const response = await fetch(SCRIPT_URL);
+                allLeads = await response.json();
+                renderLeads(allLeads);
+            } catch (err) {
+                document.getElementById('lead-list').innerHTML = `<p class="text-red-500 text-center">Failed to load leads. Check script permissions.</p>`;
+            }
         }
 
         function renderLeads(leads) {
             const container = document.getElementById('lead-list');
-            container.innerHTML = leads.map(lead => `
-                <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
-                    <h3 class="font-bold text-lg">${lead['Lead Name']}</h3>
-                    <p class="text-sm text-gray-500 mb-3">Last Note: ${lead['Notes'] || 'No notes yet'}</p>
-                    <button onclick="openModal('${lead['Lead Name']}')" class="w-full py-2 bg-green-50 text-green-700 font-semibold rounded-lg border border-green-200 hover:bg-green-100">
-                        + Log Visit
-                    </button>
+            if (leads.length === 0) {
+                container.innerHTML = `<p class="text-center text-slate-500">No leads found.</p>`;
+                return;
+            }
+
+            container.innerHTML = leads.map(lead => {
+                const lastTouch = lead['First Touch'] ? new Date(lead['First Touch']).toLocaleDateString() : 'No visits yet';
+                return `
+                <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition">
+                    <div class="flex justify-between items-start mb-2">
+                        <h3 class="font-bold text-slate-800 text-lg">${lead['Lead Name']}</h3>
+                        <span class="text-[10px] uppercase tracking-wider font-bold px-2 py-1 rounded ${lead['First Touch'] ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}">
+                            ${lead['First Touch'] ? 'Visited' : 'New'}
+                        </span>
+                    </div>
+                    <p class="text-sm text-slate-500 mb-4 italic">"${lead['Notes'] || 'No notes yet...'}"</p>
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs text-slate-400">Last touch: ${lastTouch}</span>
+                        <button onclick="openModal('${lead['Lead Name']}')" class="px-4 py-2 bg-slate-800 text-white text-sm font-semibold rounded-lg hover:bg-slate-700 transition">
+                            Log Visit
+                        </button>
+                    </div>
                 </div>
-            `).join('');
+            `}).join('');
+        }
+
+        function filterLeads() {
+            const query = document.getElementById('search').value.toLowerCase();
+            const filtered = allLeads.filter(l => l['Lead Name'].toLowerCase().includes(query));
+            renderLeads(filtered);
         }
 
         function openModal(name) {
-            selectedLead = name;
+            selectedLeadName = name;
             document.getElementById('modal-title').innerText = name;
             document.getElementById('modal').classList.remove('hidden');
+            document.getElementById('note-input').focus();
         }
 
         function closeModal() {
             document.getElementById('modal').classList.add('hidden');
+            document.getElementById('note-input').value = "";
         }
 
         async function submitUpdate() {
-            const notes = document.getElementById('note-input').value;
-            const btn = event.target;
+            const note = document.getElementById('note-input').value;
+            const btn = document.getElementById('save-btn');
+            
+            if(!note) { alert("Please enter a note"); return; }
+
+            btn.disabled = true;
             btn.innerText = "Saving...";
 
-            await fetch(SCRIPT_URL, {
-                method: "POST",
-                body: JSON.stringify({ leadName: selectedLead, notes: notes })
-            });
-
-            location.reload(); // Refresh to show changes
+            try {
+                await fetch(SCRIPT_URL, {
+                    method: "POST",
+                    body: JSON.stringify({ leadName: selectedLeadName, notes: note })
+                });
+                closeModal();
+                fetchLeads(); // Refresh data
+            } catch (err) {
+                alert("Error saving. Try again.");
+            } finally {
+                btn.disabled = false;
+                btn.innerText = "Save Visit";
+            }
         }
 
         fetchLeads();
